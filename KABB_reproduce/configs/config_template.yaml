@@ -1,0 +1,885 @@
+# ================================
+# Multi-domain config (10 CAPs)
+# Compatible with: run_kabb.py / kabb/utils.py
+# ================================
+
+# ================================
+# System Prompts
+# ================================
+system_prompts:
+  default: |
+    You are a helpful assistant. Follow the user's request carefully.
+    When solving problems, be precise. If unsure, say so briefly and proceed with best effort.
+
+  error_handling: |
+    If a request is ambiguous or missing key info, state assumptions clearly and continue.
+
+# ================================
+# Domain Inference Settings
+# Used by logic_based_domain_inference() in kabb/utils.py
+# ================================
+domain_inference_settings:
+  math:
+    prior: 0.80
+    typical_samples: |
+      Solve for x in an equation. Compute an integral. Evaluate a probability.
+      Prove a statement or compute a determinant. Work with algebra/geometry/calculus.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "math"
+      - "algebra"
+      - "geometry"
+      - "calculus"
+      - "integral"
+      - "derivative"
+      - "limit"
+      - "probability"
+      - "statistics"
+      - "matrix"
+      - "determinant"
+      - "\\frac"
+      - "\\sqrt"
+      - "\\sum"
+      - "\\int"
+      - "\\pi"
+      - "="
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+  physics_chem:
+    prior: 0.60
+    typical_samples: |
+      Explain or compute results in physics/chemistry: forces, energy, circuits,
+      thermodynamics, electromagnetism, stoichiometry, reactions, pH, equilibrium.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "physics"
+      - "chemistry"
+      - "force"
+      - "energy"
+      - "momentum"
+      - "circuit"
+      - "voltage"
+      - "current"
+      - "thermodynamics"
+      - "electromagnetism"
+      - "reaction"
+      - "molar"
+      - "stoichiometry"
+      - "equilibrium"
+      - "pH"
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+  bio_medicine:
+    prior: 0.60
+    typical_samples: |
+      Biology/medicine questions: anatomy, physiology, genetics, pathology, diagnosis,
+      pharmacology basics, clinical knowledge, nutrition, virology.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "biology"
+      - "medicine"
+      - "anatomy"
+      - "physiology"
+      - "genetics"
+      - "clinical"
+      - "diagnosis"
+      - "symptom"
+      - "pathology"
+      - "nutrition"
+      - "virus"
+      - "virology"
+      - "pharmacology"
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+  cs_ml_security:
+    prior: 0.70
+    typical_samples: |
+      Computer science / ML / security: algorithms, complexity, programming, debugging,
+      machine learning, neural nets, cryptography basics, secure systems.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "code"
+      - "program"
+      - "python"
+      - "javascript"
+      - "compile"
+      - "debug"
+      - "algorithm"
+      - "complexity"
+      - "data structure"
+      - "machine learning"
+      - "neural network"
+      - "security"
+      - "cryptography"
+      - "vulnerability"
+      - "exploit"
+      - "SQL"
+      - "API"
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+  law_politics:
+    prior: 0.55
+    typical_samples: |
+      Law/politics: legal reasoning, statutes, case analysis, international law,
+      governance, public policy, diplomacy, security studies.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "law"
+      - "legal"
+      - "statute"
+      - "case"
+      - "court"
+      - "jurisdiction"
+      - "international law"
+      - "treaty"
+      - "policy"
+      - "government"
+      - "politics"
+      - "diplomacy"
+      - "security studies"
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+  business_econ:
+    prior: 0.55
+    typical_samples: |
+      Business/econ/management: markets, incentives, accounting, finance, strategy,
+      marketing, macro/micro economics, econometrics basics.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "economics"
+      - "microeconomics"
+      - "macroeconomics"
+      - "inflation"
+      - "GDP"
+      - "supply"
+      - "demand"
+      - "market"
+      - "pricing"
+      - "accounting"
+      - "finance"
+      - "balance sheet"
+      - "management"
+      - "marketing"
+      - "ROI"
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+  history_humanities:
+    prior: 0.50
+    typical_samples: |
+      History/humanities: historical context, chronology, interpretation of events,
+      philosophy basics, world religions, cultural analysis.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "history"
+      - "historical"
+      - "century"
+      - "empire"
+      - "war"
+      - "revolution"
+      - "philosophy"
+      - "religion"
+      - "world religions"
+      - "ethics"
+      - "culture"
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+  psych_sociology:
+    prior: 0.50
+    typical_samples: |
+      Psychology/sociology: cognitive processes, behavior, mental disorders (general),
+      social structures, demographics, research methods, social theory.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "psychology"
+      - "behavior"
+      - "cognitive"
+      - "memory"
+      - "personality"
+      - "mental health"
+      - "sociology"
+      - "social"
+      - "demographic"
+      - "survey"
+      - "experiment"
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+  logic_ethics:
+    prior: 0.50
+    typical_samples: |
+      Logic/ethics: formal logic, validity, fallacies, moral dilemmas,
+      normative ethics, applied ethics, reasoning puzzles.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "logic"
+      - "valid"
+      - "invalid"
+      - "fallacy"
+      - "syllogism"
+      - "proof"
+      - "contradiction"
+      - "ethics"
+      - "moral"
+      - "dilemma"
+      - "ought"
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+  geography_other:
+    prior: 0.45
+    typical_samples: |
+      Geography/other: maps, countries, climate, global facts, general knowledge,
+      miscellaneous domains not covered above.
+    difficulty_range: [1, 5]
+    symbol_patterns:
+      - "geography"
+      - "country"
+      - "capital"
+      - "continent"
+      - "map"
+      - "climate"
+      - "global facts"
+      - "miscellaneous"
+    weights:
+      overlap: 0.35
+      path_distance: 0.35
+      historical_similarity: 0.30
+
+# ================================
+# Knowledge Graph
+# Used by kabb/bandit.py (concept overlap + conflicts)
+# (Currently bandit not wired into run_kabb.py, but kept for future routing)
+# ================================
+knowledge_graph:
+  math:
+    concepts: ["algebra","geometry","calculus","statistics","probability","number theory","linear algebra","discrete mathematics","trigonometry","mathematical modeling"]
+    conflicts: []
+  physics_chem:
+    concepts: ["classical mechanics","thermodynamics","electromagnetism","quantum physics","optics","astronomy","nuclear physics","fluid dynamics","relativity theory","particle physics","stoichiometry","chemical equilibrium","acids and bases","organic chemistry","inorganic chemistry"]
+    conflicts: []
+  bio_medicine:
+    concepts: ["anatomy","physiology","genetics","microbiology","immunology","pathology","pharmacology","clinical reasoning","nutrition","virology","epidemiology"]
+    conflicts: []
+  cs_ml_security:
+    concepts: ["algorithms","data structures","complexity","computer architecture","operating systems","networks","databases","software engineering","machine learning","deep learning","information security","cryptography","web security"]
+    conflicts: []
+  law_politics:
+    concepts: ["constitutional law","international law","jurisprudence","legal reasoning","public policy","governance","diplomacy","security studies","political theory"]
+    conflicts: []
+  business_econ:
+    concepts: ["microeconomics","macroeconomics","econometrics","finance","accounting","marketing","management","strategy","game theory","industrial organization"]
+    conflicts: []
+  history_humanities:
+    concepts: ["ancient history","modern history","world history","us history","european history","philosophy","world religions","cultural studies","historiography"]
+    conflicts: []
+  psych_sociology:
+    concepts: ["cognitive psychology","social psychology","clinical psychology","research methods","statistics for social science","sociological theory","demography","organizations","social stratification"]
+    conflicts: []
+  logic_ethics:
+    concepts: ["formal logic","proof techniques","logical fallacies","deontological ethics","consequentialism","virtue ethics","applied ethics"]
+    conflicts: []
+  geography_other:
+    concepts: ["physical geography","human geography","cartography","geopolitics","global facts","climate science","miscellaneous"]
+    conflicts: []
+
+# ================================
+# Expert Definitions
+# For each domain, we provide two default experts: Analysis + Solution
+# You can later expand each domain with more experts/models/prompts.
+# ================================
+experts:
+  math:
+    - name: "math | qwen-2.5-72b"
+      domain_expertise: ["math"]
+      capabilities: {"solve": 0.95, "verification": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are an expert mathematician. Solve accurately."
+      task_template: |
+        Problem: {{user_prompt}}
+        Requirements:
+        - Provide correct reasoning.
+        - Final answer in $\boxed{}$ when applicable.
+      max_tokens: 900
+      model: "qwen/qwen-2.5-72b-instruct"
+      cost: 0.39
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "math | deepseek-r1"
+      domain_expertise: ["math"]
+      capabilities: {"solve": 0.95, "verification": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are an expert mathematician with strong reasoning. Solve accurately."
+      task_template: |
+        Problem: {{user_prompt}}
+        Requirements:
+        - Provide correct reasoning.
+        - Final answer in $\boxed{}$ when applicable.
+      max_tokens: 900
+      model: "deepseek/deepseek-r1"
+      cost: 1.2
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "math | qwen-2.5-7b"
+      domain_expertise: ["math"]
+      capabilities: {"solve": 0.8, "verification": 0.75}
+      knowledge_dependencies: []
+      role_prompt: "You are a helpful math assistant. Solve correctly if possible."
+      task_template: |
+        Problem: {{user_prompt}}
+        Requirements:
+        - Try to be correct and concise.
+        - Final answer in $\boxed{}$ when applicable.
+      max_tokens: 700
+      model: "qwen/qwen-2.5-7b-instruct"
+      cost : 0.1
+      prior_alpha: 1
+      prior_beta: 1
+
+  physics_chem:
+    - name: "physics_chem | claude-4.5"
+      domain_expertise: ["physics_chem"]
+      capabilities: {"solve": 0.92, "explain": 0.92}
+      knowledge_dependencies: []
+      role_prompt: "You are a physics/chemistry expert. Solve accurately with proper units."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Use correct principles/equations.
+        - Include units when applicable.
+        - Be concise.
+      max_tokens: 900
+      model: "anthropic/claude-sonnet-4.5"
+      cost : 15
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "physics_chem | llama-3.1-405b"
+      domain_expertise: ["physics_chem"]
+      capabilities: {"solve": 0.92, "explain": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are a physics/chemistry expert. Solve accurately and clearly."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Use correct principles/equations.
+        - Include units when applicable.
+      max_tokens: 900
+      model: "meta-llama/llama-3.1-405b-instruct"
+      cost : 3.1
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "physics_chem | gemma-2-9b-it"
+      domain_expertise: ["physics_chem"]
+      capabilities: {"solve": 0.8, "explain": 0.8}
+      knowledge_dependencies: []
+      role_prompt: "You are a physics/chemistry assistant. Provide the best answer you can."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Be concise.
+        - Include units if applicable.
+      max_tokens: 700
+      model: "google/gemma-2-9b-it"
+      cost: 0.65
+      prior_alpha: 1
+      prior_beta: 1
+
+  bio_medicine:
+    - name: "bio_medicine | gpt-4o"
+      domain_expertise: ["bio_medicine"]
+      capabilities: {"accuracy": 0.9, "explain": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are a biology/medicine expert. Answer accurately and cautiously."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide an accurate, concise answer.
+        - If clinical, avoid diagnosis certainty; mention uncertainty briefly.
+      max_tokens: 900
+      model: "openai/gpt-4o"
+      cost: 10
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "bio_medicine | claude-4.5"
+      domain_expertise: ["bio_medicine"]
+      capabilities: {"accuracy": 0.9, "explain": 0.92}
+      knowledge_dependencies: []
+      role_prompt: "You are a biology/medicine expert. Answer accurately and cautiously."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide an accurate, concise answer.
+        - If clinical, include a short safety caveat.
+      max_tokens: 900
+      model: "anthropic/claude-sonnet-4.5"
+      cost: 15
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "bio_medicine | llama-3.1-8b"
+      domain_expertise: ["bio_medicine"]
+      capabilities: {"accuracy": 0.75, "explain": 0.75}
+      knowledge_dependencies: []
+      role_prompt: "You are a biology/medicine assistant. Provide the best answer you can."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Be concise.
+        - Avoid overconfident medical claims.
+      max_tokens: 700
+      model: "meta-llama/llama-3.1-8b-instruct"
+      cost: 0.03
+      prior_alpha: 1
+      prior_beta: 1
+
+  cs_ml_security:
+    - name: "cs_ml_security | deepseek-3"
+      domain_expertise: ["cs_ml_security"]
+      capabilities: {"solve": 0.92, "code": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are a CS/ML/security expert. Provide correct, practical solutions."
+      task_template: |
+        Problem: {{user_prompt}}
+        Requirements:
+        - If code is needed, provide minimal correct code.
+        - Explain key reasoning briefly.
+      max_tokens: 1200
+      model: "deepseek/deepseek-v3.2"
+      cost : 0.32
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "cs_ml_security | qwen-2.5-72b"
+      domain_expertise: ["cs_ml_security"]
+      capabilities: {"solve": 0.9, "code": 0.85}
+      knowledge_dependencies: []
+      role_prompt: "You are a CS/ML/security expert. Provide correct solutions."
+      task_template: |
+        Problem: {{user_prompt}}
+        Requirements:
+        - Provide correct reasoning.
+        - Provide code/pseudocode when helpful.
+      max_tokens: 1200
+      model: "qwen/qwen-2.5-72b-instruct"
+      cost : 0.39
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "cs_ml_security | mistral-7b-instruct"
+      domain_expertise: ["cs_ml_security"]
+      capabilities: {"solve": 0.8, "code": 0.78}
+      knowledge_dependencies: []
+      role_prompt: "You are a CS assistant. Provide the best practical answer you can."
+      task_template: |
+        Problem: {{user_prompt}}
+        Requirements:
+        - Be concise.
+        - Provide code/pseudocode if needed.
+      max_tokens: 900
+      model: "mistralai/mistral-7b-instruct-v0.3"
+      cost : 0.054
+      prior_alpha: 1
+      prior_beta: 1
+
+  law_politics:
+    - name: "law_politics | claude-4.5"
+      domain_expertise: ["law_politics"]
+      capabilities: {"reasoning": 0.92, "structure": 0.92}
+      knowledge_dependencies: []
+      role_prompt: "You are a law/politics expert. Provide careful, structured analysis."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide a structured answer.
+        - Note assumptions/jurisdiction dependence.
+        - Not legal advice.
+      max_tokens: 1200
+      model: "anthropic/claude-sonnet-4.5"
+      cost : 15
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "law_politics | Command-R-Plus"
+      domain_expertise: ["law_politics"]
+      capabilities: {"reasoning": 0.9, "structure": 0.92}
+      knowledge_dependencies: []
+      role_prompt: "You are a law/politics expert. Provide careful, structured analysis."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide a structured answer.
+        - Avoid overconfident legal claims.
+      max_tokens: 1200
+      model: "cohere/command-r-plus-08-2024"
+      cost : 0.6
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "law_politics | gpt-3.5-turbo"
+      domain_expertise: ["law_politics"]
+      capabilities: {"reasoning": 0.75, "structure": 0.75}
+      knowledge_dependencies: []
+      role_prompt: "You are a helpful assistant for law/politics questions. Do your best."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Be concise and structured.
+        - Not legal advice.
+      max_tokens: 900
+      model: "openai/gpt-3.5-turbo"
+      cost: 0.02
+      prior_alpha: 1
+      prior_beta: 1
+
+  business_econ:
+    - name: "business_econ | gpt-4o"
+      domain_expertise: ["business_econ"]
+      capabilities: {"reasoning": 0.9, "quant": 0.85}
+      knowledge_dependencies: []
+      role_prompt: "You are a business/economics expert. Provide actionable, structured answers."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide a structured recommendation or explanation.
+        - Use simple quantitative reasoning if relevant.
+      max_tokens: 1200
+      model: "openai/gpt-4o"
+      cost : 10
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "business_econ | Command-R-Plus"
+      domain_expertise: ["business_econ"]
+      capabilities: {"reasoning": 0.88, "structure": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are a business/economics expert. Provide clear, structured answers."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide structured reasoning (bullets/steps).
+        - Mention assumptions.
+      max_tokens: 1200
+      model: "cohere/command-r-plus-08-2024"
+      cost : 0.6
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "business_econ | gemma-2-9b-it"
+      domain_expertise: ["business_econ"]
+      capabilities: {"reasoning": 0.78, "structure": 0.78}
+      knowledge_dependencies: []
+      role_prompt: "You are a business/econ assistant. Provide the best answer you can."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Be concise.
+        - Mention key assumptions.
+      max_tokens: 900
+      model: "google/gemma-2-9b-it"
+      cost: 0.09
+      prior_alpha: 1
+      prior_beta: 1
+
+  history_humanities:
+    - name: "history_humanities | llama-3.1-405b"
+      domain_expertise: ["history_humanities"]
+      capabilities: {"context": 0.92, "reasoning": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are a history/humanities expert. Provide accurate context-aware answers."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide a structured answer.
+        - If facts are uncertain, qualify briefly.
+      max_tokens: 1200
+      model: "meta-llama/llama-3.1-405b-instruct"
+      cost: 3.1
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "history_humanities | claude-4.5"
+      domain_expertise: ["history_humanities"]
+      capabilities: {"context": 0.92, "reasoning": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are a history/humanities expert. Provide accurate, nuanced answers."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide a structured answer.
+        - Avoid overconfident claims if uncertain.
+      max_tokens: 1200
+      model: "anthropic/claude-sonnet-4.5"
+      cost: 15
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "history_humanities | ministral-3b"
+      domain_expertise: ["history_humanities"]
+      capabilities: {"context": 0.75, "reasoning": 0.75}
+      knowledge_dependencies: []
+      role_prompt: "You are a history/humanities assistant. Provide the best answer you can."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Be concise.
+        - Mention uncertainty if needed.
+      max_tokens: 900
+      model: "mistralai/ministral-3b"
+      cost: 0.04
+      prior_alpha: 1
+      prior_beta: 1
+
+  psych_sociology:
+    - name: "psych_sociology | claude-4.5"
+      domain_expertise: ["psych_sociology"]
+      capabilities: {"reasoning": 0.9, "caution": 0.92}
+      knowledge_dependencies: []
+      role_prompt: "You are a psychology/sociology expert. Be evidence-aware and cautious."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide a structured answer.
+        - Avoid diagnosis; be cautious with mental health claims.
+      max_tokens: 1200
+      model: "anthropic/claude-sonnet-4.5"
+      cost: 15
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "psych_sociology | gpt-4o"
+      domain_expertise: ["psych_sociology"]
+      capabilities: {"reasoning": 0.88, "caution": 0.88}
+      knowledge_dependencies: []
+      role_prompt: "You are a psychology/sociology expert. Be evidence-aware."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Provide a structured answer.
+        - Avoid medical diagnosis claims.
+      max_tokens: 1200
+      model: "openai/gpt-4o"
+      cost : 10
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "psych_sociology | llama-3.2-3b"
+      domain_expertise: ["psych_sociology"]
+      capabilities: {"reasoning": 0.75, "caution": 0.75}
+      knowledge_dependencies: []
+      role_prompt: "You are a helpful assistant for psychology/sociology questions."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Be concise and cautious.
+      max_tokens: 900
+      model: "meta-llama/llama-3.2-3b-instruct"
+      cost: 0.02
+      prior_alpha: 1
+      prior_beta: 1
+
+  logic_ethics:
+    - name: "logic_ethics | deepseek-r1"
+      domain_expertise: ["logic_ethics"]
+      capabilities: {"formal_reasoning": 0.92, "structure": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are a logic/ethics expert with strong reasoning. Provide structured analysis."
+      task_template: |
+        Prompt: {{user_prompt}}
+        Requirements:
+        - Provide clear argument structure.
+        - State assumptions explicitly.
+      max_tokens: 1200
+      model: "deepseek/deepseek-r1"
+      cost : 1.2
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "logic_ethics | claude-4.5"
+      domain_expertise: ["logic_ethics"]
+      capabilities: {"formal_reasoning": 0.9, "structure": 0.92}
+      knowledge_dependencies: []
+      role_prompt: "You are a logic/ethics expert. Provide careful, structured reasoning."
+      task_template: |
+        Prompt: {{user_prompt}}
+        Requirements:
+        - Provide structured reasoning.
+        - Be explicit about assumptions.
+      max_tokens: 1200
+      model: "anthropic/claude-sonnet-4.5"
+      cost : 15
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "logic_ethics | mistral-small-creative"
+      domain_expertise: ["logic_ethics"]
+      capabilities: {"reasoning": 0.78, "structure": 0.78}
+      knowledge_dependencies: []
+      role_prompt: "You are a helpful assistant for logic/ethics problems."
+      task_template: |
+        Prompt: {{user_prompt}}
+        Requirements:
+        - Be concise.
+        - Provide a clear stance with reasoning.
+      max_tokens: 900
+      model: "mistralai/mistral-small-creative"
+      cost: 0.3
+      prior_alpha: 1
+      prior_beta: 1
+
+  geography_other:
+    - name: "geography_other | grok-4.1-fast"
+      domain_expertise: ["geography_other"]
+      capabilities: {"fact_recall": 0.88, "speed": 0.9}
+      knowledge_dependencies: []
+      role_prompt: "You are a geography/general knowledge expert. Answer directly."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Give a direct answer.
+        - If uncertain or time-dependent, say so briefly.
+      max_tokens: 900
+      model: "x-ai/grok-4.1-fast"
+      cost: 0.5
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "geography_other | llama-3.1-405b"
+      domain_expertise: ["geography_other"]
+      capabilities: {"fact_recall": 0.9, "reasoning": 0.85}
+      knowledge_dependencies: []
+      role_prompt: "You are a geography/general knowledge expert. Answer accurately."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Give a direct answer.
+        - Mention uncertainty if needed.
+      max_tokens: 900
+      model: "meta-llama/llama-3.1-405b-instruct"
+      cost: 3.1
+      prior_alpha: 2
+      prior_beta: 1
+
+    - name: "geography_other | gemma-2-27b-it"
+      domain_expertise: ["geography_other"]
+      capabilities: {"fact_recall": 0.8, "reasoning": 0.78}
+      knowledge_dependencies: []
+      role_prompt: "You are a geography/general knowledge assistant."
+      task_template: |
+        Question: {{user_prompt}}
+        Requirements:
+        - Be concise.
+        - Mention uncertainty if needed.
+      max_tokens: 900
+      model: "google/gemma-2-27b-it"
+      cost: 0.65
+      prior_alpha: 1
+      prior_beta: 1
+
+
+# ================================
+# Integrator Definition
+# Single integrator shared across domains (simple + robust for "run through")
+# ================================
+integrator:
+  default:
+    name: "integrator"
+    capabilities:
+      content_integration: 0.95
+      quality_control: 0.90
+      consistency_check: 0.85
+    role_prompt: |
+      You are an expert integrator. Produce the best final answer to the user.
+      Do NOT mention other experts or the integration process.
+      Keep the response concise and correct.
+
+    task_template: |
+      Task:
+      1) Read the user question.
+      2) Review the proposals (may contain errors).
+      3) Provide the best final answer.
+      User Question:
+      {{user_prompt}}
+
+      Proposals:
+      {{expert_proposals}}
+
+      Requirements:
+      - Provide a direct final answer.
+      - If the task is math, put the final answer in $\boxed{}$ when appropriate.
+      - If factual, avoid overconfident claims; briefly state uncertainty if needed.
+      - Keep it under 300 words.
+
+    max_tokens: 1200
+    model: "qwen/qwen-2.5-72b-instruct"
+    temperature: 0.7
+
+# ================================
+# Model Management
+# ================================
+models:
+  default: "qwen/qwen-2.5-72b-instruct"
+
+# ================================
+# LLM API Configuration
+# ================================
+llm_api:
+  provider: "openrouter"
+  api_key: "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"
+
+# ================================
+# Logging Settings
+# ================================
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  handlers:
+    - type: "file"
+      filename: "moa_system.log"
+    - type: "stream"
+      stream: "stdout"
+
+# ================================
+# NOTE: SUBJECT2CAP mapping (for your dataset preprocessing)
+# This repo's code does NOT consume it directly.
+# You can use SUBJECT2CAP externally to attach a domain label to each sample.
+# ================================
+# CAP_NAMES:
+#   - math
+#   - physics_chem
+#   - bio_medicine
+#   - cs_ml_security
+#   - law_politics
+#   - business_econ
+#   - history_humanities
+#   - psych_sociology
+#   - logic_ethics
+#   - geography_other
