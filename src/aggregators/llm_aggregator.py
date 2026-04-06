@@ -15,7 +15,7 @@ class LLMAggregator:
         self.cfg = cfg
         self.client = client or OpenRouterClient()
 
-    def aggregate(self, user_prompt: str, expert_names: List[str], expert_answers: List[str]) -> str:
+    def _build_messages(self, user_prompt: str, expert_names: List[str], expert_answers: List[str]) -> List[Dict[str, str]]:
         packed = []
         for n, a in zip(expert_names, expert_answers):
             packed.append(f"## Expert: {n}\n{a}\n")
@@ -42,14 +42,21 @@ class LLMAggregator:
             "3) Provide the best final answer."
         )
 
-        messages: List[Dict[str, str]] = [
+        return [
             {"role": "system", "content": self.cfg.system_prompt},
             {"role": "user", "content": user},
         ]
+
+    def aggregate(self, user_prompt: str, expert_names: List[str], expert_answers: List[str]) -> str:
+        out = self.aggregate_with_usage(user_prompt, expert_names, expert_answers)
+        return out["text"]
+
+    def aggregate_with_usage(self, user_prompt: str, expert_names: List[str], expert_answers: List[str]) -> Dict:
+        messages = self._build_messages(user_prompt, expert_names, expert_answers)
         out = self.client.chat(
             model=self.cfg.model,
             messages=messages,
             temperature=self.cfg.temperature,
             max_tokens=self.cfg.max_tokens,
         )
-        return out["text"]
+        return out

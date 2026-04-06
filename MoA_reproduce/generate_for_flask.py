@@ -6,11 +6,11 @@ from typing import List
 from loguru import logger
 
 from utils import (
-    generate_together,
-    generate_openai,
-    generate_with_references,
+    generate_together_with_usage,
+    generate_openai_with_usage,
+    generate_openrouter_with_usage,
+    generate_with_references_with_usage,
     DEBUG,
-    generate_openrouter
 )
 
 # 仅新增：引入 openrouter 的 generate 函数（要求你已在 utils.py 里实现）
@@ -26,13 +26,17 @@ def process_fn(
     rounds=1,
     provider="together",
 ):
+    total_cost = 0.0
+    total_calls = 0
+    reference_cost = 0.0
+    aggregator_cost = 0.0
 
     if provider == "together":
-        generate_fn = generate_together
+        generate_fn = generate_together_with_usage
     elif provider == "openai":
-        generate_fn = generate_openai
+        generate_fn = generate_openai_with_usage
     elif provider == "openrouter":
-        generate_fn = generate_openrouter
+        generate_fn = generate_openrouter_with_usage
     else:
         raise ValueError(f"Unsupported provider: {provider}. Use together/openai/openrouter.")
 
@@ -54,8 +58,7 @@ def process_fn(
             references = []
 
             for reference_model in reference_models:
-
-                reference = generate_with_references(
+                payload = generate_with_references_with_usage(
                     model=reference_model,
                     messages=messages,
                     references=prev_references,
@@ -63,10 +66,15 @@ def process_fn(
                     max_tokens=max_tokens,
                     generate_fn=generate_fn,
                 )
+                reference = payload.get("text")
 
                 if reference is not None:
 
                     references.append(reference)
+                    call_cost = float(payload.get("usage", {}).get("cost", 0.0) or 0.0)
+                    total_cost += call_cost
+                    reference_cost += call_cost
+                    total_calls += 1
 
             if i_round < rounds - 1:
 
@@ -74,15 +82,26 @@ def process_fn(
 
                 references = []
 
-    output = generate_with_references(
+    payload = generate_with_references_with_usage(
         model=model,
         messages=messages,
         references=references,
+        temperature=temperature,
+        max_tokens=max_tokens,
         generate_fn=generate_fn,
     )
+    output = payload.get("text")
+    call_cost = float(payload.get("usage", {}).get("cost", 0.0) or 0.0)
+    total_cost += call_cost
+    aggregator_cost += call_cost
+    total_calls += 1
 
     return {
         "text": output,
+        "cost": total_cost,
+        "num_calls": total_calls,
+        "reference_cost": reference_cost,
+        "aggregator_cost": aggregator_cost,
     }
 
 
@@ -166,6 +185,15 @@ def main(
     logger.info(f"Saving outputs to {output_path}.")
 
     eval_set.to_json(output_path)
+
+    rows = list(eval_set)
+    total_cost = sum(float(row.get("cost", 0.0) or 0.0) for row in rows)
+    total_calls = sum(int(row.get("num_calls", 0) or 0) for row in rows)
+    num_q = len(rows)
+    avg_cost = total_cost / num_q if num_q else 0.0
+    logger.info(f"Total cost: {total_cost:.6f}")
+    logger.info(f"Average cost per question: {avg_cost:.6f}")
+    logger.info(f"Total model calls: {total_calls}")
 
 
 if __name__ == "__main__":

@@ -251,6 +251,10 @@ def main():
 
     # pacing
     ap.add_argument("--sleep", type=float, default=0.2)
+    ap.add_argument("--reference_model", type=str, default="qwen/qwen-2.5-72b-instruct",
+                    help="Reference model for bandit scoring. Set to empty string to disable.")
+    ap.add_argument("--reference_system_prompt", type=str,
+                    default="You are a helpful assistant.Please answer the user's question thoroughly and accurately.")
 
     args = ap.parse_args()
 
@@ -396,15 +400,17 @@ def main():
     aggregator = LLMAggregator(aggregator_cfg)
 
     # ---------- Reference baseline model ----------
-    ref_model = OpenRouterLLMExpert(
-        meta=ExpertMeta(name="ref", s=np.zeros(args.d_s, dtype=np.float64), cost=0.0),
-        cfg=LLMExpertConfig(
-            model="qwen/qwen-2.5-72b-instruct",
-            system_prompt="You are a helpful assistant.Please answer the user's question thoroughly and accurately.",
-            temperature=0.2,
-            max_tokens=1024,
-        ),
-    )
+    ref_model = None
+    if args.reference_model.strip():
+        ref_model = OpenRouterLLMExpert(
+            meta=ExpertMeta(name="ref", s=np.zeros(args.d_s, dtype=np.float64), cost=0.0),
+            cfg=LLMExpertConfig(
+                model=args.reference_model,
+                system_prompt=args.reference_system_prompt,
+                temperature=0.2,
+                max_tokens=1024,
+            ),
+        )
 
     # ---------- Judge ----------
     judge_model = "openai/gpt-4o"
@@ -536,16 +542,23 @@ def main():
             agg_key = {"type": "agg", "model": aggregator_cfg.model, "prompt": prompt, "names": chosen_names, "answers": answers}
             final = cache.get(agg_key)
             if final is None:
-                final = router.aggregator.aggregate(prompt, chosen_names, answers)
+                final = router.aggregator.aggregate_with_usage(prompt, chosen_names, answers)
                 cache.put(agg_key, final)
+                actual_cost_usd += float(final.get("usage", {}).get("cost", 0.0) or 0.0)
 
+            final_text = final["text"] if isinstance(final, dict) else str(final)
             if args.policy == "bandit":
                 # 4) reference baseline (cached)
-                ref_key = {"type": "ref", "model": ref_model.cfg.model, "sys": ref_model.cfg.system_prompt, "prompt": prompt}
-                ref = cache.get(ref_key)
-                if ref is None:
-                    ref = ref_model.infer_with_usage(prompt)
-                    cache.put(ref_key, ref)
+                ref_text = None
+                ref = None
+                if ref_model is not None:
+                    ref_key = {"type": "ref", "model": ref_model.cfg.model, "sys": ref_model.cfg.system_prompt, "prompt": prompt}
+                    ref = cache.get(ref_key)
+                    if ref is None:
+                        ref = ref_model.infer_with_usage(prompt)
+                        cache.put(ref_key, ref)
+                        actual_cost_usd += float(ref.get("usage", {}).get("cost", 0.0) or 0.0)
+                    ref_text = ref["text"] if isinstance(ref, dict) else str(ref)
 
                 # 5) judge score (cached)
             if args.policy == "bandit":
@@ -553,8 +566,8 @@ def main():
                     judge_client=judge_client,
                     judge_model=judge_model,
                     prompt=prompt,
-                    answer=final,
-                    reference=ref,   
+                    answer=final_text,
+                    reference=ref_text,
                     cache=cache,
                     score_min=0.0,
                     score_max=10.0,
@@ -572,7 +585,7 @@ def main():
                 rewards.append(reward)
             else:
                 score = -1.0
-                ref = ""
+                ref = None
                 reward = 0.0
                 costs.append(actual_cost_usd)
 
@@ -585,7 +598,7 @@ def main():
                 "chosen_names": chosen_names,
                 "answers": answers,
                 "final": final,
-                "reference": ref,
+                "reference": ref["text"] if isinstance(ref, dict) else ref,
                 "score_final_vs_ref": float(score),
                 "cost": float(actual_cost_usd),
                 "reward": float(reward),

@@ -262,8 +262,9 @@ def run_one(router, cache, aggregator_cfg, prompt: str, args):
     agg_key = {"type": "agg", "model": aggregator_cfg.model, "prompt": prompt, "names": chosen_names, "answers": answers}
     final = cache.get(agg_key)
     if final is None:
-        final = router.aggregator.aggregate(prompt, chosen_names, answers)
+        final = router.aggregator.aggregate_with_usage(prompt, chosen_names, answers)
         cache.put(agg_key, final)
+        actual_cost_usd += float(final.get("usage", {}).get("cost", 0.0) or 0.0)
 
    
     cost = float(router.costs[chosen_idx].sum())
@@ -301,6 +302,10 @@ def main():
 
     # pacing
     ap.add_argument("--sleep", type=float, default=0.2)
+    ap.add_argument("--reference_model", type=str, default="qwen/qwen2.5-vl-72b-instruct",
+                    help="Reference model for MT-Bench scoring. Set to empty string to disable.")
+    ap.add_argument("--reference_system_prompt", type=str,
+                    default="You are a helpful assistant.Please answer the user's question thoroughly and accurately.")
 
     args = ap.parse_args()
 
@@ -436,15 +441,17 @@ def main():
     aggregator = LLMAggregator(aggregator_cfg)
 
     # ---------- Reference baseline model ----------
-    ref_model = OpenRouterLLMExpert(
-        meta=ExpertMeta(name="ref", s=np.zeros(args.d_s, dtype=np.float64), cost=0.0),
-        cfg=LLMExpertConfig(
-            model="qwen/qwen2.5-vl-72b-instruct",
-            system_prompt="You are a helpful assistant.Please answer the user's question thoroughly and accurately.",
-            temperature=0.2,
-            max_tokens=1024,
-        ),
-    )
+    ref_model = None
+    if args.reference_model.strip():
+        ref_model = OpenRouterLLMExpert(
+            meta=ExpertMeta(name="ref", s=np.zeros(args.d_s, dtype=np.float64), cost=0.0),
+            cfg=LLMExpertConfig(
+                model=args.reference_model,
+                system_prompt=args.reference_system_prompt,
+                temperature=0.2,
+                max_tokens=1024,
+            ),
+        )
 
     # ---------- Judge ----------
     judge_model = "openai/gpt-4o"
@@ -548,30 +555,35 @@ def main():
                 # router prompt
                 p = build_chat_prompt(history, turns[turn_i])
                 final, chosen_idx, chosen_names, answers, cost, Z, actual_cost_usd = run_one(router, cache, aggregator_cfg, p, args)
+                turn_actual_cost = actual_cost_usd
 
 
-                history.append((turns[turn_i], final))
-                out_turns.append(final)
+                final_text = final["text"] if isinstance(final, dict) else str(final)
+                history.append((turns[turn_i], final_text))
+                out_turns.append(final_text)
                 chosen_names_by_turn.append(chosen_names)
 
 
                 total_cost += cost
-                actual_cost_total += actual_cost_usd
                 Z_sum = Z if Z_sum is None else (Z_sum + Z)
-                costs.append(actual_cost_usd)
 
 
                 # ref prompt
                 ref_p = build_chat_prompt(ref_history, turns[turn_i])
-                ref_key = {"type": "ref", "model": ref_model.cfg.model, "sys": ref_model.cfg.system_prompt, "prompt": ref_p}
-                ref_ans = cache.get(ref_key)
-                if ref_ans is None:
-                    ref_ans = ref_model.infer(ref_p)
-                    cache.put(ref_key, ref_ans)
+                ref_text = None
+                if ref_model is not None:
+                    ref_key = {"type": "ref", "model": ref_model.cfg.model, "sys": ref_model.cfg.system_prompt, "prompt": ref_p}
+                    ref_ans = cache.get(ref_key)
+                    if ref_ans is None:
+                        ref_ans = ref_model.infer_with_usage(ref_p)
+                        cache.put(ref_key, ref_ans)
+                        turn_actual_cost += float(ref_ans.get("usage", {}).get("cost", 0.0) or 0.0)
+                    ref_text = ref_ans["text"] if isinstance(ref_ans, dict) else str(ref_ans)
+                    ref_history.append((turns[turn_i], ref_text))
+                    ref_turns.append(ref_text)
 
-
-                ref_history.append((turns[turn_i], ref_ans))
-                ref_turns.append(ref_ans)
+                actual_cost_total += turn_actual_cost
+                costs.append(turn_actual_cost)
 
 
             
@@ -579,8 +591,8 @@ def main():
             judge_client=judge_client,
             judge_model=judge_model,
             prompt=ref_p, #
-            answer=final,
-            reference=ref_ans,
+            answer=final_text,
+            reference=ref_text,
             cache=cache,
             score_min=0.0,
             score_max=10.0,

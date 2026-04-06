@@ -18,6 +18,7 @@ from typing import List, Dict, Any, Tuple
 
 from kabb.llm_client import LLMClient
 from kabb.utils import logic_based_domain_inference, estimate_task_difficulty
+import scripts.run_kabb as rk
 from scripts.run_kabb import (
     get_domain_all_expert_responses,
     get_integrated_content_new,
@@ -28,29 +29,6 @@ DEFAULT_BENCH_NAME = "mt_bench"
 DEFAULT_MODEL_ID = "kabb_openrouter"
 DEFAULT_QUESTION_FILE = "MoA/FastChat/fastchat/llm_judge/data/mt_bench/question.jsonl"
 DEFAULT_ANSWER_DIR = "KABB/runs/mt_bench/model_answer"
-
-# -----------------------
-# cost accounting (per-call from config, NOT token-based)
-# -----------------------
-def _safe_float(x, default=0.0) -> float:
-    try:
-        return float(x)
-    except Exception:
-        return float(default)
-
-def compute_round_cost(experts: List[dict], integrator_info: dict) -> Tuple[float, int]:
-    """
-    One KABB 'round' = call all experts + call integrator once.
-    cost is summed from config fields: expert.cost and integrator.cost (per-call).
-    """
-    cost = 0.0
-    calls = 0
-    for e in experts:
-        cost += _safe_float(e.get("cost", 0.0))
-        calls += 1
-    cost += _safe_float((integrator_info or {}).get("cost", 0.0))
-    calls += 1
-    return cost, calls
 
 def load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
@@ -127,8 +105,7 @@ async def run_one_round(config: dict, llm_client: LLMClient, user_input: str, to
     if not selected_experts:
         raise ValueError(f"No experts defined for domain={domain_label}.")
 
-    # cost for this round
-    round_cost, round_calls = compute_round_cost(selected_experts, integrator_info)
+    rk.reset_question_cost()
 
     # call all experts (this is how your current code behaves)
     all_responses = {
@@ -143,7 +120,7 @@ async def run_one_round(config: dict, llm_client: LLMClient, user_input: str, to
         integrator_info, system_prompt, llm_client, cleaned_input, integrated_content
     )
 
-    return final_answer.strip(), round_cost, round_calls, domain_label
+    return final_answer.strip(), float(rk.TOTAL_COST), int(rk.TOTAL_CALLS), domain_label
 
 async def run_one_question(config: dict, llm_client: LLMClient, q: dict, max_turns: int = 2, top_k_domain: int = 1) -> Tuple[List[str], float, int, List[str]]:
     """

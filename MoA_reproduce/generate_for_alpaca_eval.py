@@ -54,7 +54,7 @@ def openrouter_chat(
     references=None,
     temperature: float = 0.7,
     max_tokens: int = 2048,
-):
+) -> dict:
     """
     user_messages: [{"role": "...", "content": "..."}]
     references: List[str] | None
@@ -77,7 +77,17 @@ def openrouter_chat(
         max_tokens=max_tokens,
         extra_headers=EXTRA_HEADERS,
     )
-    return (resp.choices[0].message.content or "").strip()
+    usage_obj = getattr(resp, "usage", None)
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0.0}
+    if usage_obj is not None:
+        raw = usage_obj.model_dump() if hasattr(usage_obj, "model_dump") else dict(getattr(usage_obj, "__dict__", {}) or {})
+        usage = {
+            "prompt_tokens": int(raw.get("prompt_tokens", 0) or 0),
+            "completion_tokens": int(raw.get("completion_tokens", 0) or 0),
+            "total_tokens": int(raw.get("total_tokens", 0) or 0),
+            "cost": float(raw.get("cost", 0.0) or 0.0),
+        }
+    return {"text": (resp.choices[0].message.content or "").strip(), "usage": usage}
 
 
 def process_fn(
@@ -88,6 +98,10 @@ def process_fn(
     max_tokens=2048,
     rounds=1,
 ):
+    total_cost = 0.0
+    total_calls = 0
+    reference_cost = 0.0
+    aggregator_cost = 0.0
     if reference_models is None:
         reference_models = []
 
@@ -112,8 +126,13 @@ def process_fn(
                         temperature=temperature,
                         max_tokens=max_tokens,
                     )
-                    if ref:
-                        cur_refs.append(ref)
+                    ref_text = ref.get("text")
+                    if ref_text:
+                        cur_refs.append(ref_text)
+                    call_cost = float(ref.get("usage", {}).get("cost", 0.0) or 0.0)
+                    total_cost += call_cost
+                    reference_cost += call_cost
+                    total_calls += 1
                 except Exception as e:
                     logger.warning(f"Reference model failed: {reference_model} err={e}")
 
@@ -127,12 +146,24 @@ def process_fn(
             temperature=temperature,
             max_tokens=max_tokens,
         )
+        output_text = output.get("text") or ""
+        call_cost = float(output.get("usage", {}).get("cost", 0.0) or 0.0)
+        total_cost += call_cost
+        aggregator_cost += call_cost
+        total_calls += 1
     except Exception as e:
         logger.error(f"Aggregator model failed: {model} err={e}")
-        output = ""
+        output_text = ""
 
    
-    return {"output": output, "generator": model + "-openrouter"}
+    return {
+        "output": output_text,
+        "generator": model + "-openrouter",
+        "cost": total_cost,
+        "num_calls": total_calls,
+        "reference_cost": reference_cost,
+        "aggregator_cost": aggregator_cost,
+    }
 
 
 def main(
@@ -213,6 +244,15 @@ def main(
 
     with open(output_path, "w") as f:
         json.dump(list(eval_set), f, indent=2, ensure_ascii=False)
+
+    rows = list(eval_set)
+    total_cost = sum(float(row.get("cost", 0.0) or 0.0) for row in rows)
+    total_calls = sum(int(row.get("num_calls", 0) or 0) for row in rows)
+    num_q = len(rows)
+    avg_cost = total_cost / num_q if num_q else 0.0
+    logger.info(f"Total cost: {total_cost:.6f}")
+    logger.info(f"Average cost per question: {avg_cost:.6f}")
+    logger.info(f"Total model calls: {total_calls}")
 
 
 if __name__ == "__main__":

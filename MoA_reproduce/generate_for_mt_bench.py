@@ -36,7 +36,14 @@ from fastchat.llm_judge.common import load_questions, temperature_config
 from fastchat.llm_judge.gen_model_answer import reorg_answer_file
 
 # Keep Together/OpenAI compatibility if you still want it
-from utils import generate_together, generate_openai, DEBUG  # noqa: F401
+from utils import (
+    generate_together,
+    generate_openai,
+    generate_together_with_usage,
+    generate_openai_with_usage,
+    generate_openrouter_with_usage,
+    DEBUG,
+)  # noqa: F401
 
 # OpenRouter (OpenAI-compatible)
 from openai import OpenAI
@@ -77,7 +84,7 @@ def generate_with_references_local(
     temperature: float,
     max_tokens: int,
     generate_fn,
-) -> str:
+) -> dict:
     """
     Wraps references into a system message, then calls generate_fn(messages, model, temperature, max_tokens).
     """
@@ -96,7 +103,10 @@ def generate_with_references_local(
         temperature=temperature,
         max_tokens=max_tokens,
     )
-    return (out or "").strip()
+    return {
+        "text": (out.get("text") or "").strip(),
+        "usage": out.get("usage", {}),
+    }
 
 
 # -----------------------------
@@ -112,19 +122,14 @@ def _openrouter_headers():
     }
 
 
-def generate_openrouter(*, messages, model, temperature=0.7, max_tokens=1024) -> str:
-    api_key = os.environ["OPENROUTER_API_KEY"]
-    client = OpenAI(base_url=_OPENROUTER_BASE_URL, api_key=api_key)
-
-    resp = client.chat.completions.create(
-        model=model,
+def generate_openrouter(*, messages, model, temperature=0.7, max_tokens=1024) -> dict:
+    return generate_openrouter_with_usage(
         messages=messages,
+        model=model,
         temperature=temperature,
         max_tokens=max_tokens,
         extra_headers=_openrouter_headers(),
-        stream=False,
     )
-    return (resp.choices[0].message.content or "")
 
 
 def _pick_temperature(question: dict, force_temperature: Optional[float]) -> float:
@@ -152,15 +157,19 @@ def get_answer(
     temperature = _pick_temperature(question, force_temperature)
 
     if provider == "together":
-        generate_fn = generate_together
+        generate_fn = generate_together_with_usage
     elif provider == "openai":
-        generate_fn = generate_openai
+        generate_fn = generate_openai_with_usage
     elif provider == "openrouter":
         generate_fn = generate_openrouter
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
     choices = []
+    total_cost = 0.0
+    total_calls = 0
+    reference_cost = 0.0
+    aggregator_cost = 0.0
 
     for i in range(num_choices):
         turns = []
@@ -194,8 +203,13 @@ def get_answer(
                                 max_tokens=max_tokens,
                                 generate_fn=generate_fn,
                             )
-                            if ref:
-                                cur_refs.append(ref)
+                            ref_text = ref.get("text")
+                            if ref_text:
+                                cur_refs.append(ref_text)
+                            call_cost = float(ref.get("usage", {}).get("cost", 0.0) or 0.0)
+                            total_cost += call_cost
+                            reference_cost += call_cost
+                            total_calls += 1
                         except Exception as e:
                             logger.warning(
                                 f"Reference model failed: {reference_model} "
@@ -215,15 +229,20 @@ def get_answer(
                     max_tokens=max_tokens,
                     generate_fn=generate_fn,
                 )
+                output_text = output.get("text") or ""
+                call_cost = float(output.get("usage", {}).get("cost", 0.0) or 0.0)
+                total_cost += call_cost
+                aggregator_cost += call_cost
+                total_calls += 1
             except Exception as e:
                 logger.error(
                     f"Aggregator model failed: {model} "
                     f"(q_id={question['question_id']}, turn={j}) err={e}"
                 )
-                output = ""
+                output_text = ""
 
-            messages.append({"role": "assistant", "content": output})
-            turns.append(output)
+            messages.append({"role": "assistant", "content": output_text})
+            turns.append(output_text)
 
         choices.append({"index": i, "turns": turns})
 
@@ -233,6 +252,10 @@ def get_answer(
         "model_id": model,
         "choices": choices,
         "tstamp": time.time(),
+        "cost": total_cost,
+        "num_calls": total_calls,
+        "reference_cost": reference_cost,
+        "aggregator_cost": aggregator_cost,
     }
 
     os.makedirs(os.path.dirname(answer_file), exist_ok=True)
@@ -330,6 +353,22 @@ def main():
             future.result()
 
     reorg_answer_file(answer_file)
+
+    total_cost = 0.0
+    total_calls = 0
+    total_questions = 0
+    with open(answer_file, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            total_questions += 1
+            total_cost += float(row.get("cost", 0.0) or 0.0)
+            total_calls += int(row.get("num_calls", 0) or 0)
+    avg_cost = total_cost / total_questions if total_questions else 0.0
+    print(f"Total cost: {total_cost:.6f}")
+    print(f"Average cost per question: {avg_cost:.6f}")
+    print(f"Total model calls: {total_calls}")
 
 
 if __name__ == "__main__":
