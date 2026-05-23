@@ -39,6 +39,9 @@ class Router:
         V0_inv_path: str | None = None,
         b0_path: str | None = None,
         w0_path: str | None = None,
+        use_query_embedding: bool = True,
+        use_meta_vectors: bool = True,
+        use_hadamard: bool = True,
     ):
 
 
@@ -53,11 +56,12 @@ class Router:
         self.task_proj = TaskProjector(W_x, b_x=b_x)
         self.meta_proj = MetaProjector(W_m, b_m=b_m)
 
-
-
         self.experts = experts
         self.enc = STTextEncoder(model_name=text_model, instruction_prefix=instruction_prefix)
         self.feat = FeatEncoder(d_c=d_c)
+        self.use_query_embedding = use_query_embedding
+        self.use_meta_vectors = use_meta_vectors
+        self.use_hadamard = use_hadamard
         d_x = W_x.shape[0]
         self.p = 3 * d_x
 
@@ -76,9 +80,20 @@ class Router:
 
     def _phis_for_prompt(self, q: str) -> Tuple[np.ndarray, List[np.ndarray]]:
         h = self.enc(q)
+        if not self.use_query_embedding:
+            h = np.zeros_like(h)
         c = self.feat(q)
         x = self.task_proj(h, c)
-        phis = [build_phi(x, v) for v in self.v_list]
+        phis = [
+            build_phi(
+                x,
+                v,
+                include_x=True,
+                include_v=self.use_meta_vectors,
+                include_xv=self.use_meta_vectors and self.use_hadamard,
+            )
+            for v in self.v_list
+        ]
         return x, phis
 
     def step_real(

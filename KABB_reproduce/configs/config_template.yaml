@@ -853,7 +853,7 @@ models:
 # ================================
 llm_api:
   provider: "openrouter"
-  api_key: "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"
+  api_key: ""
 
 # ================================
 # Logging Settings

@@ -142,7 +142,8 @@ async def main():
     print("\n==== AlpacaEval Cost Summary ====\n")
     print(f"Total questions: {num_q}")
     print(f"Total cost: {total_cost_all:.6f}")
-    print(f"Average cost per question: {avg_cost:.6f}")
+    print(f"num_instructions: {num_q}")
+    print(f"cost_per_instruction: {avg_cost:.6f}")
 
 
 if __name__ == "__main__":

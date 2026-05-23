@@ -366,8 +366,14 @@ def main():
             total_cost += float(row.get("cost", 0.0) or 0.0)
             total_calls += int(row.get("num_calls", 0) or 0)
     avg_cost = total_cost / total_questions if total_questions else 0.0
+    total_instructions = 0
+    for q in questions[question_begin:question_end]:
+        total_instructions += len(q.get("turns", []))
+    cost_per_instruction = (total_cost / total_instructions) if total_instructions else 0.0
     print(f"Total cost: {total_cost:.6f}")
     print(f"Average cost per question: {avg_cost:.6f}")
+    print(f"num_instructions: {total_instructions}")
+    print(f"cost_per_instruction: {cost_per_instruction:.6f}")
     print(f"Total model calls: {total_calls}")
 
 

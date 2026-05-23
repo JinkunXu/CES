@@ -5,8 +5,9 @@ import pandas as pd
 from typing import List, Dict, Any, Tuple, Union
 from alpaca_eval import evaluate
 
-os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
-os.environ["OPENAI_API_KEY"] = "YOUR OPENROUTER_API_KEY"  # set your OpenRouter API key in environment variable
+os.environ.setdefault("OPENAI_API_BASE", "https://openrouter.ai/api/v1")
+if "OPENAI_API_KEY" not in os.environ and "OPENROUTER_API_KEY" in os.environ:
+    os.environ["OPENAI_API_KEY"] = os.environ["OPENROUTER_API_KEY"]
 def _normalize_model_row(d: Dict[str, Any], generator_name: str, idx: int) -> Dict[str, Any]:
     inst = d.get("instruction") or d.get("prompt") or d.get("query")
     out = d.get("output") or d.get("response") or d.get("completion")

@@ -5,8 +5,9 @@ import os
 from datasets import load_dataset
 
 
-os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
-os.environ["OPENAI_API_KEY"] = "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"
+os.environ.setdefault("OPENAI_API_BASE", "https://openrouter.ai/api/v1")
+if "OPENAI_API_KEY" not in os.environ and "OPENROUTER_API_KEY" in os.environ:
+    os.environ["OPENAI_API_KEY"] = os.environ["OPENROUTER_API_KEY"]
 
 print("正在加载基准数据...")
 try:
@@ -37,4 +38,3 @@ result = evaluate(
     reference_outputs=reference_outputs,
     annotators_config="alpaca_eval_gpt4_turbo_fn"
 )
-

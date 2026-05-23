@@ -1,6 +1,8 @@
 # src/data/dataset_loader.py
 from __future__ import annotations
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from typing import Optional, Dict, Any, Iterator, Tuple, List
 from datasets import load_dataset
 
@@ -92,8 +94,32 @@ def iter_dataset(
 
     # ---------------- FLASK-Hard (use generic HF config) ----------------
     if ds_name in ["flask-hard", "flask_hard", "flaskhard"]:
-        # FLASK-Hard has multiple HF wrappers; use generic args to avoid repo-specific code.
-        # You must pass dataset_hf_path / split / text_fields (or rely on defaults below).
+        fields = (
+            [s.strip() for s in dataset_text_fields.split(",")]
+            if dataset_text_fields
+            else ["instruction", "input", "question", "prompt"]
+        )
+
+        # Prefer the bundled FLASK-Hard evaluation set for reproducibility.
+        repo_root = Path(__file__).resolve().parents[2]
+        local_path = repo_root / "FLASK" / "evaluation_set" / "flask_hard_evaluation.jsonl"
+        if dataset_hf_path is None and local_path.exists():
+            n = 0
+            with local_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    ex = json.loads(line)
+                    prompt = _build_prompt_from_fields(ex, fields)
+                    if not prompt:
+                        continue
+                    yield prompt, dict(ex)
+                    n += 1
+                    if limit is not None and n >= limit:
+                        break
+            return
+
+        # FLASK-Hard has multiple HF wrappers; keep a generic HF fallback.
         hf_path = dataset_hf_path or "tatsu-lab/flask"  # placeholder default; adjust if you have a specific repo
         split = dataset_split or "test"
         cfg = dataset_config  # may be None
@@ -101,13 +127,6 @@ def iter_dataset(
         ds = load_dataset(hf_path, cfg)[split] if cfg is not None else load_dataset(hf_path)[split]
         if limit is not None:
             ds = ds.select(range(min(limit, len(ds))))
-
-        # default: try common fields
-        fields = (
-            [s.strip() for s in dataset_text_fields.split(",")]
-            if dataset_text_fields
-            else ["instruction", "input", "question", "prompt"]
-        )
 
         for ex in ds:
             prompt = _build_prompt_from_fields(ex, fields)

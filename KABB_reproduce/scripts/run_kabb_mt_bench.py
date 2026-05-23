@@ -234,8 +234,11 @@ async def main():
     print(f"Answer file: {out_path}")
     print(f"Total questions: {num_q}")
     print(f"Total calls: {total_calls}")
+    total_instructions = sum(len(q.get("turns", [])[:args.max_turns]) for q in questions[args.start:args.end])
+    avg_cost_instruction = (total_cost / total_instructions) if total_instructions > 0 else 0.0
     print(f"Total cost: {total_cost:.6f}")
-    print(f"Average cost per question: {avg_cost_q:.6f}")
+    print(f"num_instructions: {total_instructions}")
+    print(f"cost_per_instruction: {avg_cost_instruction:.6f}")
     print(f"Average calls per question: {avg_calls_q:.2f}")
 
 if __name__ == "__main__":

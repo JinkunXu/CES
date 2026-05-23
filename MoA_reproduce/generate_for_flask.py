@@ -192,7 +192,8 @@ def main(
     num_q = len(rows)
     avg_cost = total_cost / num_q if num_q else 0.0
     logger.info(f"Total cost: {total_cost:.6f}")
-    logger.info(f"Average cost per question: {avg_cost:.6f}")
+    logger.info(f"num_instructions: {num_q}")
+    logger.info(f"cost_per_instruction: {avg_cost:.6f}")
     logger.info(f"Total model calls: {total_calls}")
 
 

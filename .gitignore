@@ -1,0 +1,27 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+
+# Generated experiment outputs
+runs/
+outputs/
+*.log
+
+# Large model/data artifacts that should be documented separately
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.pkl
+*.npy
+*.npz
+
+# OS/editor noise
+.DS_Store
+.vscode/
+.idea/

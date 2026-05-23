@@ -519,8 +519,9 @@ async def main():
 
     print("\n==== Cost Report ====\n")
     print(f"Total model calls: {TOTAL_CALLS}")
-    print(f"Total cost (sum of config.cost): {TOTAL_COST:.6f}")
-    print(f"Average cost per question: {TOTAL_COST:.6f}")  # 单题模式
+    print(f"Total cost: {TOTAL_COST:.6f}")
+    print(f"num_instructions: 1")
+    print(f"cost_per_instruction: {TOTAL_COST:.6f}")
 
 
     print("\n==== Processing Complete ====\n")

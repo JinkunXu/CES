@@ -32,7 +32,15 @@ def _l2n(a: np.ndarray, eps: float = 1e-12) -> np.ndarray:
         n = np.linalg.norm(a)
         return a / (n + eps)
 
-def build_phi(x: np.ndarray, v: np.ndarray, beta: float = 3.0, gamma: float = 3.0) -> np.ndarray:
+def build_phi(
+    x: np.ndarray,
+    v: np.ndarray,
+    beta: float = 3.0,
+    gamma: float = 3.0,
+    include_x: bool = True,
+    include_v: bool = True,
+    include_xv: bool = True,
+) -> np.ndarray:
         x = x.astype(np.float64)
         v = v.astype(np.float64)
 
@@ -40,7 +48,12 @@ def build_phi(x: np.ndarray, v: np.ndarray, beta: float = 3.0, gamma: float = 3.
         vn  = _l2n(v)
         xvn = _l2n(x * v)
 
-       
-        return np.concatenate([xn, beta * vn, gamma * xvn])  # phi_i = [ x ; v_i ; x ⊙ v_i ]
+        if not include_x:
+            xn = np.zeros_like(xn)
+        if not include_v:
+            vn = np.zeros_like(vn)
+        if not include_xv:
+            xvn = np.zeros_like(xvn)
 
+        return np.concatenate([xn, beta * vn, gamma * xvn])  # phi_i = [ x ; v_i ; x ⊙ v_i ]
 

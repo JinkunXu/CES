@@ -56,6 +56,15 @@ class DiskCache:
         return val
 
 
+def usage_cost_usd(payload: Any) -> float:
+    if not isinstance(payload, dict):
+        return 0.0
+    usage = payload.get("usage", {})
+    if not isinstance(usage, dict):
+        return 0.0
+    return float(usage.get("cost", 0.0) or 0.0)
+
+
 def init_mats_pca_warmstart(
     d_x: int,
     d_u: int,
@@ -100,6 +109,22 @@ def init_mats_pca_warmstart(
     if d_x > k:
         W_m[k:, :] = rng.normal(size=(d_x - k, d_s)) * (1e-3 / np.sqrt(max(d_s, 1)))
 
+    return W_x, W_m
+
+
+def init_mats_random(
+    d_x: int,
+    d_u: int,
+    d_s: int,
+    seed: int = 0,
+) -> Tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(seed)
+    A = rng.normal(size=(d_u, d_u))
+    Q, _ = np.linalg.qr(A)
+    W_x = Q[:d_x, :].astype(np.float64)
+    W_x *= (1.0 / np.sqrt(max(d_u, 1)))
+    W_m = rng.normal(size=(d_x, d_s)).astype(np.float64)
+    W_m *= (1.0 / np.sqrt(max(d_s, 1)))
     return W_x, W_m
 
 
@@ -228,6 +253,15 @@ def main():
     ap.add_argument("--policy", type=str, default="bandit",
                 choices=["bandit", "random", "cheapest"],
                 help="Expert selection policy for ablation.")
+    ap.add_argument("--warm_start", type=str, default="pca", choices=["pca", "random"])
+    ap.add_argument("--use_query_embedding", dest="use_query_embedding", action="store_true")
+    ap.add_argument("--no_query_embedding", dest="use_query_embedding", action="store_false")
+    ap.add_argument("--use_meta_vectors", dest="use_meta_vectors", action="store_true")
+    ap.add_argument("--no_meta_vectors", dest="use_meta_vectors", action="store_false")
+    ap.add_argument("--use_hadamard", dest="use_hadamard", action="store_true")
+    ap.add_argument("--no_hadamard", dest="use_hadamard", action="store_false")
+    ap.add_argument("--use_cost_penalty", dest="use_cost_penalty", action="store_true")
+    ap.add_argument("--no_cost_penalty", dest="use_cost_penalty", action="store_false")
 
 
     # feature/embedding dims
@@ -256,6 +290,12 @@ def main():
     ap.add_argument("--reference_system_prompt", type=str,
                     default="You are a helpful assistant.Please answer the user's question thoroughly and accurately.")
 
+    ap.set_defaults(
+        use_query_embedding=True,
+        use_meta_vectors=True,
+        use_hadamard=True,
+        use_cost_penalty=True,
+    )
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(args.out_log), exist_ok=True)
@@ -462,12 +502,20 @@ def main():
     d_u = enc.d_h + args.d_c
     S_list = [e.meta.s for e in experts]   # each is (d_s,) e.g. 11
 
-    W_x, W_m = init_mats_pca_warmstart(
-        d_x=args.d_x,
-        d_u=d_u,
-        S_list=S_list,
-        seed=args.seed,
-    )
+    if args.warm_start == "pca":
+        W_x, W_m = init_mats_pca_warmstart(
+            d_x=args.d_x,
+            d_u=d_u,
+            S_list=S_list,
+            seed=args.seed,
+        )
+    else:
+        W_x, W_m = init_mats_random(
+            d_x=args.d_x,
+            d_u=d_u,
+            d_s=args.d_s,
+            seed=args.seed,
+        )
 
     # ---------- Router ----------
     router = Router(
@@ -479,8 +527,12 @@ def main():
         d_c=args.d_c,
         alpha=3.5,
         lam=0.1,
+        use_query_embedding=args.use_query_embedding,
+        use_meta_vectors=args.use_meta_vectors,
+        use_hadamard=args.use_hadamard,
     )
     router.aggregator = aggregator  # attach
+    effective_lam_cost = args.lam_cost if args.use_cost_penalty else 0.0
 
     scoress, rewards, costs = [], [], []
 
@@ -505,7 +557,12 @@ def main():
                 if t % 5 == 0:
                     all_names = [e.meta.name for e in router.experts]
                     debug_phi(router, phis, all_names, topn=10)
-                chosen_idx = router.agent.select_topk(phis, k=args.k)
+                chosen_idx = router.agent.select_topk(
+                    phis,
+                    k=args.k,
+                    costs=router.costs if args.use_cost_penalty else None,
+                    lam_cost=effective_lam_cost,
+                )
 
             elif args.policy == "random":
                 chosen_idx = rng_select.choice(len(router.experts), size=args.k, replace=False)
@@ -530,11 +587,12 @@ def main():
                     out = e.infer_with_usage(prompt) 
                     ans = out["text"]
                     cache.put(key, {"text": ans, "usage": out.get("usage", {}), "id": out.get("id")})
-                    actual_cost_usd += float(out.get("usage", {}).get("cost", 0.0) or 0.0)
+                    actual_cost_usd += usage_cost_usd(out)
                     print (actual_cost_usd)
                 else:
            
                     ans = cached["text"] if isinstance(cached, dict) else cached
+                    actual_cost_usd += usage_cost_usd(cached)
                 
                 answers.append(ans)
 
@@ -544,7 +602,7 @@ def main():
             if final is None:
                 final = router.aggregator.aggregate_with_usage(prompt, chosen_names, answers)
                 cache.put(agg_key, final)
-                actual_cost_usd += float(final.get("usage", {}).get("cost", 0.0) or 0.0)
+            actual_cost_usd += usage_cost_usd(final)
 
             final_text = final["text"] if isinstance(final, dict) else str(final)
             if args.policy == "bandit":
@@ -557,7 +615,7 @@ def main():
                     if ref is None:
                         ref = ref_model.infer_with_usage(prompt)
                         cache.put(ref_key, ref)
-                        actual_cost_usd += float(ref.get("usage", {}).get("cost", 0.0) or 0.0)
+                    actual_cost_usd += usage_cost_usd(ref)
                     ref_text = ref["text"] if isinstance(ref, dict) else str(ref)
 
                 # 5) judge score (cached)
@@ -575,7 +633,7 @@ def main():
 
                 # 6) reward + update
                 cost = float(router.costs[chosen_idx].sum())
-                reward = float(score - args.lam_cost * cost)
+                reward = float(score - effective_lam_cost * cost)
 
                 Z = np.sum([phis[i] for i in chosen_idx], axis=0)
                 router.agent.update(Z, reward)
@@ -593,6 +651,13 @@ def main():
                 "t": t,
                 "dataset": "alpaca_eval_2.0",
                 "policy": args.policy,
+                "warm_start": args.warm_start,
+                "use_query_embedding": bool(args.use_query_embedding),
+                "use_meta_vectors": bool(args.use_meta_vectors),
+                "use_hadamard": bool(args.use_hadamard),
+                "use_cost_penalty": bool(args.use_cost_penalty),
+                "lam_cost_effective": float(effective_lam_cost),
+                "k": int(args.k),
                 "prompt": prompt,
                 "chosen_idx": chosen_idx.tolist(),
                 "chosen_names": chosen_names,
@@ -612,8 +677,17 @@ def main():
 
             time.sleep(args.sleep)
 
+    total_cost = float(np.sum(costs))
+    num_instructions = len(costs)
+    cost_per_instruction = (total_cost / num_instructions) if num_instructions else 0.0
     print(f"[DONE] wrote log to: {args.out_log}")
-    print(f"avg_score={float(np.mean(scoress)):.4f}, avg_cost={float(np.mean(costs)):.4f}, avg_reward={float(np.mean(rewards)):.4f}")
+    print(
+        f"avg_score={float(np.mean(scoress)):.4f}, "
+        f"avg_reward={float(np.mean(rewards)):.4f}, "
+        f"total_cost={total_cost:.4f}, "
+        f"num_instructions={num_instructions}, "
+        f"cost_per_instruction={cost_per_instruction:.4f}"
+    )
 
 
 if __name__ == "__main__":

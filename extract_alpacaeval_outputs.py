@@ -19,11 +19,17 @@ def main():
             if not line.strip():
                 continue
             obj = json.loads(line)
+            final = obj.get("final", "")
+            if isinstance(final, dict):
+                final_text = final.get("text") or ""
+            else:
+                final_text = str(final or "")
+
             rec = {
                 "id": int(obj["t"]),
                 "generator": args.generator_name,
                 "prompt": obj["prompt"],
-                "output": obj["final"],
+                "output": final_text,
                 "meta": {
                     "chosen_names": obj.get("chosen_names", []),
                     "cost": obj.get("cost", None),
