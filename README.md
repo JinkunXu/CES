@@ -1,4 +1,4 @@
-# CES
+# [KDD'2026] CES: Combinatorial Experts Selection via Contextual Linear Bandits
 
 CES is a cost-aware expert selection framework for routing each prompt to a small subset of LLM experts, aggregating their answers, and updating the router online from evaluation feedback. This repository contains scripts to reproduce the CES experiments on AlpacaEval 2.0, MT-Bench, FLASK-Hard, and objective multiple-choice benchmarks.
 
